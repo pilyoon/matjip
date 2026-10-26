@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1428A0">
+<link rel="manifest" href="manifest.json">
+<title>맛집 지도</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="map"></div>
+
+<header id="topbar">
+  <div id="searchbar">
+    <input id="q" type="search" placeholder="🔍 맛집·장소·주소 검색" autocomplete="off">
+    <div id="q-results" class="hidden"></div>
+  </div>
+  <div id="filters"></div>
+</header>
+
+<div id="fabs">
+  <button id="btn-locate" class="fab small" title="내 위치">📍</button>
+  <button id="btn-list" class="fab small" title="목록">📋</button>
+  <button id="btn-add" class="fab" title="맛집 등록">＋</button>
+</div>
+
+<!-- 등록/수정 시트 -->
+<section id="sheet-form" class="sheet hidden">
+  <div class="sheet-head">
+    <strong id="form-title">맛집 등록</strong>
+    <button class="link" id="form-cancel">닫기</button>
+  </div>
+  <div class="sheet-body">
+    <p class="hint">📌 지도를 탭하거나 핀을 드래그해서 위치를 조정하세요.</p>
+    <div class="field">이름 (🔍로 검색하면 위치가 자동 입력)
+      <div class="inline" style="margin-top:4px">
+        <input id="f-name" placeholder="식당 이름" maxlength="50">
+        <button id="f-search" class="btn-sub" type="button">🔍 검색</button>
+      </div>
+      <div id="f-results"></div>
+    </div>
+    <div class="field">카테고리<div id="f-cats" class="chips"></div></div>
+    <div class="field">별점<div id="f-stars" class="stars"></div></div>
+    <div class="field">사용 가능 식권<div id="f-tickets" class="chips"></div>
+      <div class="inline">
+        <input id="f-ticket-new" placeholder="식권 종류 추가">
+        <button id="f-ticket-add" class="btn-sub" type="button">추가</button>
+      </div>
+    </div>
+    <label>메모<textarea id="f-memo" rows="2" placeholder="대표 메뉴, 가격 등"></textarea></label>
+    <div id="f-coord" class="hint"></div>
+    <button id="f-save" class="btn-main">저장</button>
+  </div>
+</section>
+
+<!-- 목록 시트 -->
+<section id="sheet-list" class="sheet hidden">
+  <div class="sheet-head">
+    <strong>맛집 목록</strong>
+    <span>
+      <button class="link hidden" id="btn-admin">👑 승인관리</button>
+      <button class="link" id="btn-logout">로그아웃</button>
+      <button class="link" id="list-close">닫기</button>
+    </span>
+  </div>
+  <div class="sheet-body" id="list-body"></div>
+</section>
+
+<!-- 로그인 시트 -->
+<section id="sheet-auth" class="sheet hidden">
+  <div class="sheet-head"><strong>🍽️ 맛집 지도 로그인</strong></div>
+  <div class="sheet-body">
+    <label>이메일<input id="a-email" type="email" autocomplete="email" placeholder="name@example.com"></label>
+    <label>비밀번호 (6자 이상)<input id="a-pw" type="password" autocomplete="current-password"></label>
+    <label>별명 (가입 신청할 때만 입력)<input id="a-nick" maxlength="20" placeholder="예: 맛집탐험가"></label>
+    <div class="inline">
+      <button id="a-login" class="btn-main">로그인</button>
+      <button id="a-signup" class="btn-sub" type="button">가입 신청</button>
+    </div>
+    <p id="a-msg" class="hint" style="margin-top:10px"></p>
+  </div>
+</section>
+
+<!-- 승인 대기/거절 안내 -->
+<section id="sheet-pending" class="sheet hidden">
+  <div class="sheet-head"><strong id="p-title">⏳ 승인 대기 중</strong><button class="link" id="p-logout">로그아웃</button></div>
+  <div class="sheet-body">
+    <p id="p-msg">관리자가 가입 신청을 승인하면 이용할 수 있습니다.</p>
+    <button id="p-refresh" class="btn-sub" style="padding:10px 14px">승인 여부 새로고침</button>
+  </div>
+</section>
+
+<!-- 관리자: 가입 승인 -->
+<section id="sheet-admin" class="sheet hidden">
+  <div class="sheet-head"><strong>👑 가입 승인 관리</strong><button class="link" id="admin-close">닫기</button></div>
+  <div class="sheet-body" id="admin-body"></div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
