@@ -153,6 +153,7 @@ function initMap() {
     if (temp) setTemp({ lat: e.latLng.getLat(), lng: e.latLng.getLng() });
     else { closePopup(); closeSearchPin(); }
   });
+  kakao.maps.event.addListener(map, 'idle', updateOverlaps); // 이동/확대·축소 후 겹침 다시 계산
   renderMarkers();
   locate(true);
 }
@@ -237,17 +238,66 @@ function showSearchPin(s) {
 }
 function closeSearchPin() { searchOverlay?.setMap(null); searchOverlay = null; }
 
+// 겹친 핀 묶음: 화면(픽셀) 기준으로 핀끼리 겹치면 같은 묶음. 묶음의 핀을 누르면 목록으로 함께 보여준다.
+let groupOf = new Map(); // place id -> 같은 묶음의 place 배열
+const PIN_SIZE = 34;
+
+function updateOverlaps() {
+  if (!map) return;
+  const proj = map.getProjection();
+  const items = visible().map((p) => ({ p, pt: proj.containerPointFromCoords(ll(p.lat, p.lng)) }));
+  const parent = items.map((_, i) => i);
+  const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  for (let i = 0; i < items.length; i++) {
+    for (let j = i + 1; j < items.length; j++) {
+      if (Math.abs(items[i].pt.x - items[j].pt.x) < PIN_SIZE && Math.abs(items[i].pt.y - items[j].pt.y) < PIN_SIZE) parent[find(i)] = find(j);
+    }
+  }
+  const groups = new Map();
+  items.forEach((it, i) => {
+    const r = find(i);
+    if (!groups.has(r)) groups.set(r, []);
+    groups.get(r).push(it.p);
+  });
+  groupOf = new Map();
+  groups.forEach((g) => g.forEach((p) => groupOf.set(p.id, g)));
+  markers.forEach(({ el }, id) => {
+    const n = groupOf.get(id)?.length || 1;
+    const bdg = el.querySelector('.bdg');
+    bdg.textContent = n;
+    bdg.classList.toggle('hidden', n < 2);
+  });
+}
+
+function openGroup(g, at) {
+  closePopup();
+  closeSearchPin();
+  const el = document.createElement('div');
+  el.className = 'kwrap';
+  const list = [...g].sort((a, b) => b.rating - a.rating)
+    .map((p) => `<div class="item" data-act="gpick" data-id="${p.id}"><div><div class="t">${CATS[p.cat]} ${esc(p.name)}</div>
+      <div class="s">${esc(p.cat)} · ${p.tickets.map(esc).join(', ') || '식권 정보 없음'}</div></div><div class="rate" style="color:#ffb400">${stars(p.rating)}</div></div>`).join('');
+  el.innerHTML = `<div class="kcard glist"><button class="x" data-act="close">✕</button><h4>📍 이 근처 ${g.length}곳</h4><div class="gbody">${list}</div></div>`;
+  popup = overlay(ll(at.lat, at.lng), el, { zIndex: 10 });
+}
+
 function renderMarkers() {
   if (!map) return;
-  markers.forEach((o) => o.setMap(null));
+  markers.forEach(({ o }) => o.setMap(null));
   markers.clear();
   closePopup();
   visible().forEach((p) => {
     const el = document.createElement('div');
-    el.innerHTML = `<div class="pin ${pinCls(p)}"><span>${CATS[p.cat]}</span></div>`;
-    el.onclick = () => openPopup(p);
-    markers.set(p.id, overlay(ll(p.lat, p.lng), el, { zIndex: 2 }));
+    el.className = 'pinwrap';
+    el.innerHTML = `<div class="pin ${pinCls(p)}"><span>${CATS[p.cat]}</span></div><div class="bdg hidden"></div>`;
+    el.onclick = () => {
+      const g = groupOf.get(p.id);
+      if (g && g.length > 1) openGroup(g, p);
+      else openPopup(p);
+    };
+    markers.set(p.id, { o: overlay(ll(p.lat, p.lng), el, { zIndex: 2 }), el });
   });
+  updateOverlaps();
   if (!$('sheet-list').classList.contains('hidden')) renderList();
 }
 
@@ -277,6 +327,7 @@ $('map').addEventListener('click', async (e) => {
   }
   const p = places.find((x) => x.id === b.dataset.id);
   if (!p || !approved()) return;
+  if (act === 'gpick') return openPopup(p); // 겹침 목록에서 하나 선택 → 상세 말풍선
   if (act === 'comments') return openComments(p);
   closePopup();
   if (act === 'edit') openForm(p);
