@@ -133,3 +133,11 @@ body.form-open #legend { display: none; }
 .cm-h b { color: var(--brand); }
 .cm-h .link { margin-left: auto; font-size: 12px; padding: 0 4px; color: #c0392b; }
 .cm-b { white-space: pre-wrap; word-break: break-word; }
+/* 겹친 핀 */
+.pinwrap { position: relative; width: 34px; height: 34px; }
+.bdg { position: absolute; top: -8px; right: -9px; min-width: 18px; height: 18px; line-height: 18px; padding: 0 4px; border-radius: 9px; background: #e5484d; color: #fff;
+  font-size: 11px; font-weight: 700; text-align: center; border: 2px solid #fff; box-sizing: content-box; }
+.glist { min-width: 230px; max-width: 280px; }
+.glist .gbody { max-height: 38vh; overflow-y: auto; margin-top: 4px; }
+.glist .item { padding: 8px 0; }
+.glist .item:last-child { border-bottom: 0; }
