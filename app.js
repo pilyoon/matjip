@@ -534,6 +534,7 @@ $('pick-map').onclick = () => {
 };
 
 // ---------- 홈 화면에 추가 (PWA) ----------
+// 이미지 파일을 쓰지 않으므로 아이콘은 기기 기본 모양(앱 이름 첫 글자 등)으로 표시된다
 let installEvt = null;
 const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone;
 const ua = navigator.userAgent;
