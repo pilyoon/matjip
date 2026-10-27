@@ -1,9 +1,10 @@
 {
-  "name": "식권지도",
-  "short_name": "식권지도",
+  "name": "밥먹자 - 맛집 지도",
+  "short_name": "밥먹자",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#1428A0",
-  "icons": []
+  "orientation": "portrait",
+  "background_color": "#1428A0",
+  "theme_color": "#1428A0"
 }
