@@ -126,3 +126,10 @@ body.form-open #legend { display: none; }
 
 /* 설치 안내 */
 #install-body ol { margin: 4px 0 0; padding-left: 20px; line-height: 1.8; }
+/* 댓글 */
+#cm-list { margin-bottom: 10px; }
+.cm { padding: 9px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+.cm-h { display: flex; gap: 8px; align-items: center; font-size: 12px; color: #777; margin-bottom: 3px; }
+.cm-h b { color: var(--brand); }
+.cm-h .link { margin-left: auto; font-size: 12px; padding: 0 4px; color: #c0392b; }
+.cm-b { white-space: pre-wrap; word-break: break-word; }
