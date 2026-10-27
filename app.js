@@ -165,7 +165,7 @@ function mapError(err) {
   $('map').innerHTML = `<div class="nomap">${msg}</div>`;
 }
 
-function locate(zoom = true) {
+function locate(zoom = true, silent = false) {
   return new Promise((resolve) => {
     if (!navigator.geolocation || !map) return resolve(null);
     navigator.geolocation.getCurrentPosition(
@@ -182,7 +182,7 @@ function locate(zoom = true) {
         if (zoom) { map.setCenter(pos); map.setLevel(3); }
         resolve(me);
       },
-      () => { alert('위치 정보를 가져올 수 없습니다. 브라우저의 위치 권한과 HTTPS 접속 여부를 확인하세요.'); resolve(null); },
+      () => { if (!silent) alert('위치 정보를 가져올 수 없습니다. 브라우저의 위치 권한과 HTTPS 접속 여부를 확인하세요.'); resolve(null); },
       { enableHighAccuracy: true, timeout: 10000 }
     );
   });
@@ -609,29 +609,52 @@ const PICK_EXCLUDE = ['카페', '베이커리']; // 점심 추천 대상에서 �
 let pickCur = null;
 let pickLast = null;
 let pickTimer;
-function startPick() {
-  if (!approved()) return;
-  const pool = visible().filter((p) => !PICK_EXCLUDE.includes(p.cat));
+const PICK_RADIUS = 1000; // m, 현재 GPS 위치 기준 추천 반경
+let pickRun = 0;
+function distM(a, b) {
+  const R = 6371000, rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function pickEmpty(title, sub) {
   const box = $('pick');
-  box.classList.remove('hidden', 'reveal');
+  $('pick-title').textContent = title;
+  $('pick-sub').textContent = sub;
+  box.classList.remove('shuffling');
+  $('pick-actions').classList.remove('hidden');
+  $('pick-map').classList.add('hidden');
+  $('pick-again').classList.remove('hidden');
+}
+async function startPick() {
+  if (!approved()) return;
+  const run = ++pickRun;
+  const box = $('pick');
+  clearTimeout(pickTimer);
+  box.classList.remove('hidden', 'reveal', 'shuffling');
   $('result').classList.add('hidden');
   $('pick-actions').classList.add('hidden');
+  $('pick-title').textContent = '📍 내 위치 확인 중…';
+  $('pick-sub').textContent = '';
+  const me = await locate(false, true);
+  if (run !== pickRun || $('pick').classList.contains('hidden')) return; // 그 사이 닫힘/재시도
+  if (!me) {
+    pickEmpty('위치를 확인할 수 없어요 😢', '점메추는 내 위치 반경 1km 안에서 찾아요. 위치 권한을 허용하고(HTTPS 접속) 다시 시도해 주세요.');
+    return;
+  }
+  const base = visible().filter((p) => !PICK_EXCLUDE.includes(p.cat));
+  const pool = base.filter((p) => (p._dist = distM(me, p)) <= PICK_RADIUS);
   if (!pool.length) {
-    $('pick-title').textContent = '추천할 맛집이 없어요 😢';
-    $('pick-sub').textContent = PICK_EXCLUDE.includes(filter) ? `점메추는 ${PICK_EXCLUDE.join('·')}를 제외하고 추천해요. 다른 카테고리를 선택해 주세요.`
-      : filter === '전체' ? '먼저 식사할 수 있는 맛집을 등록해 주세요. (카페·베이커리 제외)' : `'${filter}' 카테고리에 등록된 맛집이 없어요.`;
-    box.classList.remove('shuffling');
-    $('pick-actions').classList.remove('hidden');
-    $('pick-map').classList.add('hidden');
-    $('pick-again').classList.add('hidden');
+    pickEmpty('근처에 맛집이 없어요 😢',
+      PICK_EXCLUDE.includes(filter) ? `점메추는 ${PICK_EXCLUDE.join('·')}를 제외하고 추천해요. 다른 카테고리를 선택해 주세요.`
+        : base.length ? `내 위치 반경 1km 안에 ${filter === '전체' ? '' : filter + ' '}맛집이 없어요. (카페·베이커리 제외)` : '먼저 식사할 수 있는 맛집을 등록해 주세요. (카페·베이커리 제외)');
     return;
   }
   $('pick-map').classList.remove('hidden');
   $('pick-again').classList.remove('hidden');
   $('pick-title').textContent = '오늘 점심은…?';
-  $('pick-sub').textContent = filter === '전체' ? `식사 가능한 ${pool.length}곳 중에서 뽑는 중...` : `${filter} ${pool.length}곳 중에서 뽑는 중...`;
+  $('pick-sub').textContent = `내 주변 1km 이내 ${filter === '전체' ? '' : filter + ' '}${pool.length}곳 중에서 뽑는 중...`;
   box.classList.add('shuffling');
-  clearTimeout(pickTimer);
   pickTimer = setTimeout(() => {
     const cand = pool.length > 1 ? pool.filter((p) => p.id !== pickLast) : pool;
     pickCur = cand[Math.floor(Math.random() * cand.length)];
@@ -644,7 +667,7 @@ function startPick() {
 function showPickResult() {
   const p = pickCur;
   $('result').innerHTML = `<div class="emo">${CATS[p.cat]}</div><div class="nm">${esc(p.name)}</div><div class="rt">${stars(p.rating)}</div>
-    <div class="mt">${esc(p.cat)} · 등록: ${esc(p.author || '익명')}</div>
+    <div class="mt">${esc(p.cat)} · 내 위치에서 ${p._dist < 950 ? Math.round(p._dist / 10) * 10 + 'm' : (p._dist / 1000).toFixed(1) + 'km'} · 등록: ${esc(p.author || '익명')}</div>
     <div>${p.tickets.map((t) => `<span class="tk ${TICKET_CLS[t] || ''}">${esc(t)}</span>`).join('')}</div>
     ${p.memo ? `<div class="mt">${esc(p.memo)}</div>` : ''}`;
   $('result').classList.remove('hidden');
@@ -653,6 +676,7 @@ function showPickResult() {
   $('pick-actions').classList.remove('hidden');
 }
 function closePick() {
+  pickRun++;
   clearTimeout(pickTimer);
   $('pick').classList.add('hidden');
   $('pick').classList.remove('shuffling', 'reveal');
