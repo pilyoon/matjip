@@ -605,19 +605,21 @@ $('list-body').onclick = (e) => {
 $('btn-locate').onclick = () => locate(true);
 
 // ---------- 점메추 (랜덤 맛집 추천) ----------
+const PICK_EXCLUDE = ['카페', '베이커리']; // 점심 추천 대상에서 제외
 let pickCur = null;
 let pickLast = null;
 let pickTimer;
 function startPick() {
   if (!approved()) return;
-  const pool = visible();
+  const pool = visible().filter((p) => !PICK_EXCLUDE.includes(p.cat));
   const box = $('pick');
   box.classList.remove('hidden', 'reveal');
   $('result').classList.add('hidden');
   $('pick-actions').classList.add('hidden');
   if (!pool.length) {
-    $('pick-title').textContent = '등록된 맛집이 없어요 😢';
-    $('pick-sub').textContent = filter === '전체' ? '먼저 맛집을 등록해 주세요.' : `'${filter}' 카테고리에 등록된 맛집이 없어요.`;
+    $('pick-title').textContent = '추천할 맛집이 없어요 😢';
+    $('pick-sub').textContent = PICK_EXCLUDE.includes(filter) ? `점메추는 ${PICK_EXCLUDE.join('·')}를 제외하고 추천해요. 다른 카테고리를 선택해 주세요.`
+      : filter === '전체' ? '먼저 식사할 수 있는 맛집을 등록해 주세요. (카페·베이커리 제외)' : `'${filter}' 카테고리에 등록된 맛집이 없어요.`;
     box.classList.remove('shuffling');
     $('pick-actions').classList.remove('hidden');
     $('pick-map').classList.add('hidden');
@@ -627,7 +629,7 @@ function startPick() {
   $('pick-map').classList.remove('hidden');
   $('pick-again').classList.remove('hidden');
   $('pick-title').textContent = '오늘 점심은…?';
-  $('pick-sub').textContent = filter === '전체' ? `등록된 ${pool.length}곳 중에서 뽑는 중...` : `${filter} ${pool.length}곳 중에서 뽑는 중...`;
+  $('pick-sub').textContent = filter === '전체' ? `식사 가능한 ${pool.length}곳 중에서 뽑는 중...` : `${filter} ${pool.length}곳 중에서 뽑는 중...`;
   box.classList.add('shuffling');
   clearTimeout(pickTimer);
   pickTimer = setTimeout(() => {
