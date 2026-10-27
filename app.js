@@ -41,8 +41,16 @@ const approved = () => profile?.status === 'approved';
 const ll = (lat, lng) => new kakao.maps.LatLng(lat, lng);
 const centerObj = () => { const c = map.getCenter(); return { lat: c.getLat(), lng: c.getLng() }; };
 
+let commentCounts = {};
+
+async function fetchCommentCounts() {
+  const { data, error } = await sb.from('comments_public').select('place_id');
+  commentCounts = {};
+  if (!error) data.forEach((c) => { commentCounts[c.place_id] = (commentCounts[c.place_id] || 0) + 1; });
+}
+
 async function fetchPlaces() {
-  const { data, error } = await sb.from('places').select('*').order('created_at');
+  const [{ data, error }] = await Promise.all([sb.from('places').select('*').order('created_at'), fetchCommentCounts()]);
   if (error) return alert('불러오기 실패: ' + error.message);
   places = data;
   renderMarkers();
@@ -195,7 +203,7 @@ function popupHtml(p) {
     <div class="meta">${esc(p.cat)} · 등록: ${esc(p.author || '익명')}</div>
     <div>${p.tickets.length ? p.tickets.map((t) => `<span class="tk ${TICKET_CLS[t] || ''}">${esc(t)}</span>`).join('') : '<span class="meta">식권 정보 없음</span>'}</div>
     ${p.memo ? `<div class="meta">${esc(p.memo)}</div>` : ''}
-    <div class="acts"><button class="link" data-act="edit" data-id="${p.id}">수정</button><button class="link" data-act="del" data-id="${p.id}">삭제</button></div>
+    <div class="acts"><button class="link" data-act="comments" data-id="${p.id}">💬 댓글${commentCounts[p.id] ? ` (${commentCounts[p.id]})` : ''}</button><button class="link" data-act="edit" data-id="${p.id}">수정</button><button class="link" data-act="del" data-id="${p.id}">삭제</button></div>
   </div>`;
 }
 
@@ -269,6 +277,7 @@ $('map').addEventListener('click', async (e) => {
   }
   const p = places.find((x) => x.id === b.dataset.id);
   if (!p || !approved()) return;
+  if (act === 'comments') return openComments(p);
   closePopup();
   if (act === 'edit') openForm(p);
   else if (act === 'del' && confirm(`'${p.name}'을(를) 삭제할까요?`)) {
@@ -397,6 +406,7 @@ function updateCoord() {
 async function openForm(place = null, preset = null) {
   if (!map) return;
   closeList();
+  dropComments();
   closePopup();
   closeSearchPin();
   hide('q-results');
@@ -444,6 +454,78 @@ $('f-save').onclick = async () => {
   fetchPlaces();
 };
 
+// ---------- 익명 댓글 ----------
+let cmPlace = null;
+
+const ago = (iso) => {
+  const s = Math.max(0, (Date.now() - new Date(iso)) / 1000);
+  if (s < 60) return '방금 전';
+  if (s < 3600) return `${Math.floor(s / 60)}분 전`;
+  if (s < 86400) return `${Math.floor(s / 3600)}시간 전`;
+  if (s < 86400 * 30) return `${Math.floor(s / 86400)}일 전`;
+  return new Date(iso).toLocaleDateString('ko-KR');
+};
+
+async function loadComments() {
+  $('cm-list').innerHTML = '<div class="empty">불러오는 중...</div>';
+  const { data, error } = await sb.from('comments_public').select('*').eq('place_id', cmPlace.id).order('created_at');
+  if (error) {
+    $('cm-list').innerHTML = `<div class="empty">댓글을 불러올 수 없습니다.<br>(schema_comments.sql을 실행했는지 확인하세요)</div>`;
+    return;
+  }
+  commentCounts[cmPlace.id] = data.length;
+  $('cm-title').textContent = `💬 ${cmPlace.name} (${data.length})`;
+  const isAdmin = !!profile?.is_admin;
+  $('cm-list').innerHTML = data.length
+    ? data.map((c) => `<div class="cm"><div class="cm-h"><b>익명${c.anon_no}${c.mine ? ' (나)' : ''}</b><span>${ago(c.created_at)}</span>
+        ${c.mine || isAdmin ? `<button class="link" data-del="${c.id}">삭제</button>` : ''}</div><div class="cm-b">${esc(c.body)}</div></div>`).join('')
+    : '<div class="empty">첫 댓글을 남겨 보세요!</div>';
+  $('cm-list').scrollTop = $('cm-list').scrollHeight;
+}
+
+async function openComments(p) {
+  closeList();
+  closeForm();
+  closePopup();
+  cmPlace = p;
+  show('sheet-comments');
+  document.body.classList.add('form-open'); // 시트가 지도를 가리지 않도록 지도 영역을 줄임
+  map.relayout();
+  map.setCenter(ll(p.lat, p.lng));
+  $('cm-input').value = '';
+  await loadComments();
+}
+function dropComments() { // 다른 시트가 열릴 때: 말풍선 복원 없이 조용히 닫기
+  hide('sheet-comments');
+  cmPlace = null;
+}
+function closeComments() {
+  hide('sheet-comments');
+  document.body.classList.remove('form-open');
+  map?.relayout();
+  const p = cmPlace;
+  cmPlace = null;
+  if (p && map) openPopup(p); // 갱신된 댓글 수로 말풍선 다시 표시
+}
+$('cm-close').onclick = closeComments;
+$('cm-send').onclick = async () => {
+  const body = $('cm-input').value.trim();
+  if (!body || !cmPlace) return;
+  $('cm-send').disabled = true;
+  const { error } = await sb.rpc('add_comment', { p_place: cmPlace.id, p_body: body });
+  $('cm-send').disabled = false;
+  if (error) return alert(error.message);
+  $('cm-input').value = '';
+  loadComments();
+};
+$('cm-list').onclick = async (e) => {
+  const id = e.target.closest('[data-del]')?.dataset.del;
+  if (!id || !confirm('이 댓글을 삭제할까요?')) return;
+  const { error } = await sb.rpc('delete_comment', { p_id: id });
+  if (error) return alert('삭제 실패: ' + error.message);
+  loadComments();
+};
+
 // ---------- 목록 ----------
 function renderList() {
   const list = visible().sort((a, b) => b.rating - a.rating);
@@ -457,6 +539,7 @@ function closeList() { hide('sheet-list'); }
 $('btn-list').onclick = () => {
   if (!$('sheet-list').classList.contains('hidden')) return closeList();
   closeForm();
+  dropComments();
   renderList();
   show('sheet-list');
 };
@@ -521,7 +604,7 @@ function closePick() {
   $('pick').classList.add('hidden');
   $('pick').classList.remove('shuffling', 'reveal');
 }
-$('btn-pick').onclick = () => { closeList(); closeForm(); startPick(); };
+$('btn-pick').onclick = () => { closeList(); closeForm(); dropComments(); startPick(); };
 $('pick-again').onclick = startPick;
 $('pick-close').onclick = closePick;
 $('pick').onclick = (e) => { if (e.target.id === 'pick') closePick(); };
