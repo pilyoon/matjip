@@ -1,5 +1,11 @@
 const CATS = { 한식: '🍚', 양식: '🍝', 중식: '🥟', 일식: '🍣', 카페: '☕', 베이커리: '🥐', 기타: '🍴' };
-const DEFAULT_TICKETS = ['식권대장', '위펀', '사내식권', '제로페이', '기타'];
+const TICKETS = ['식권대장', '비플페이'];
+const TICKET_CLS = { 식권대장: 'dk', 비플페이: 'bp' }; // 핀·칩 색상 (식권대장=초록, 비플페이=삼성블루)
+const pinCls = (p) => {
+  const dk = p.tickets.includes('식권대장');
+  const bp = p.tickets.includes('비플페이');
+  return dk && bp ? 'both' : dk ? 'dk' : bp ? 'bp' : 'none';
+};
 const SEOUL = { lat: 37.5665, lng: 126.978 };
 
 const $ = (id) => document.getElementById(id);
@@ -8,14 +14,13 @@ const hide = (id) => $(id).classList.add('hidden');
 const show = (id) => $(id).classList.remove('hidden');
 
 // ---------- Supabase ----------
-const cfg = window.MATJIP_CONFIG || {};
+const cfg = window.BABMUCKJA_CONFIG || {};
 const configured = cfg.url && cfg.anonKey && !cfg.url.includes('YOUR_');
 const sb = configured ? supabase.createClient(cfg.url, cfg.anonKey) : null;
 
 let user = null;
 let profile = null;
 let places = [];
-let tickets = JSON.parse(localStorage.getItem('matjip.tickets') || '[]'); // 이 기기에서 추가한 식권 종류
 let filter = '전체';
 let channel = null;
 let editing = null;
@@ -33,7 +38,6 @@ let ps = null;
 let geocoder = null;
 
 const approved = () => profile?.status === 'approved';
-const ticketOptions = () => [...new Set([...DEFAULT_TICKETS, ...tickets, ...places.flatMap((p) => p.tickets || [])])];
 const ll = (lat, lng) => new kakao.maps.LatLng(lat, lng);
 const centerObj = () => { const c = map.getCenter(); return { lat: c.getLat(), lng: c.getLng() }; };
 
@@ -61,7 +65,8 @@ async function onAuth(session) {
   if (!approved()) {
     const rejected = profile?.status === 'rejected';
     $('p-title').textContent = rejected ? '🚫 가입이 거절되었습니다' : '⏳ 승인 대기 중';
-    $('p-msg').textContent = rejected ? '관리자에게 문의하세요.' : `${profile?.nickname ?? ''}님, 관리자가 가입 신청을 승인하면 이용할 수 있습니다.`;
+    $('p-msg').textContent = rejected ? '이용이 제한된 계정입니다. 관리자에게 문의하세요.'
+      : `${profile?.nickname ?? ''}님, 메일로 받은 인증 링크를 누르면 바로 이용할 수 있습니다. 인증 후 아래 새로고침을 눌러 주세요.`;
     show('sheet-pending');
     places = [];
     renderMarkers();
@@ -84,10 +89,10 @@ async function authSubmit(signup) {
   if (signup && !nickname) return ($('a-msg').textContent = '별명을 입력하세요.');
   $('a-msg').textContent = '처리 중...';
   const { data, error } = signup
-    ? await sb.auth.signUp({ email, password, options: { data: { nickname } } })
+    ? await sb.auth.signUp({ email, password, options: { data: { nickname }, emailRedirectTo: location.origin + location.pathname } })
     : await sb.auth.signInWithPassword({ email, password });
   if (error) return ($('a-msg').textContent = error.message);
-  $('a-msg').textContent = signup && !data.session ? '신청 완료! 이메일 인증 링크를 누른 뒤 로그인하세요. 이후 관리자 승인을 기다려 주세요.' : '';
+  $('a-msg').textContent = signup && !data.session ? '가입 완료! 메일로 온 인증 링크를 누른 뒤 로그인하세요.' : '';
 }
 $('a-login').onclick = () => authSubmit(false);
 $('a-signup').onclick = () => authSubmit(true);
@@ -188,7 +193,7 @@ function popupHtml(p) {
     <h4>${CATS[p.cat]} ${esc(p.name)}</h4>
     <div class="rate">${stars(p.rating)}</div>
     <div class="meta">${esc(p.cat)} · 등록: ${esc(p.author || '익명')}</div>
-    <div>${p.tickets.length ? p.tickets.map((t) => `<span class="tk">${esc(t)}</span>`).join('') : '<span class="meta">식권 정보 없음</span>'}</div>
+    <div>${p.tickets.length ? p.tickets.map((t) => `<span class="tk ${TICKET_CLS[t] || ''}">${esc(t)}</span>`).join('') : '<span class="meta">식권 정보 없음</span>'}</div>
     ${p.memo ? `<div class="meta">${esc(p.memo)}</div>` : ''}
     <div class="acts"><button class="link" data-act="edit" data-id="${p.id}">수정</button><button class="link" data-act="del" data-id="${p.id}">삭제</button></div>
   </div>`;
@@ -231,7 +236,7 @@ function renderMarkers() {
   closePopup();
   visible().forEach((p) => {
     const el = document.createElement('div');
-    el.innerHTML = `<div class="pin"><span>${CATS[p.cat]}</span></div>`;
+    el.innerHTML = `<div class="pin ${pinCls(p)}"><span>${CATS[p.cat]}</span></div>`;
     el.onclick = () => openPopup(p);
     markers.set(p.id, overlay(ll(p.lat, p.lng), el, { zIndex: 2 }));
   });
@@ -360,8 +365,8 @@ function renderForm() {
     .map((c) => `<div class="chip ${c === form.cat ? 'on' : ''}" data-c="${c}">${CATS[c]} ${c}</div>`).join('');
   $('f-stars').innerHTML = [1, 2, 3, 4, 5]
     .map((n) => `<span class="${n <= form.rating ? 'on' : ''}" data-n="${n}">★</span>`).join('');
-  $('f-tickets').innerHTML = ticketOptions()
-    .map((t) => `<div class="chip ${form.tickets.has(t) ? 'on' : ''}" data-t="${esc(t)}">${esc(t)}</div>`).join('');
+  $('f-tickets').innerHTML = TICKETS
+    .map((t) => `<div class="chip ${TICKET_CLS[t]} ${form.tickets.has(t) ? 'on' : ''}" data-t="${t}">${t}</div>`).join('');
 }
 $('f-cats').onclick = (e) => { const c = e.target.closest('.chip')?.dataset.c; if (c) { form.cat = c; renderForm(); } };
 $('f-stars').onclick = (e) => {
@@ -372,14 +377,6 @@ $('f-tickets').onclick = (e) => {
   const t = e.target.closest('.chip')?.dataset.t;
   if (!t) return;
   form.tickets.has(t) ? form.tickets.delete(t) : form.tickets.add(t);
-  renderForm();
-};
-$('f-ticket-add').onclick = () => {
-  const v = $('f-ticket-new').value.trim();
-  if (!v) return;
-  if (!ticketOptions().includes(v)) { tickets.push(v); localStorage.setItem('matjip.tickets', JSON.stringify(tickets)); }
-  form.tickets.add(v);
-  $('f-ticket-new').value = '';
   renderForm();
 };
 
@@ -405,7 +402,7 @@ async function openForm(place = null, preset = null) {
   hide('q-results');
   editing = place?.id ?? null;
   form = place
-    ? { cat: place.cat, rating: place.rating, tickets: new Set(place.tickets) }
+    ? { cat: place.cat, rating: place.rating, tickets: new Set(place.tickets.filter((t) => TICKETS.includes(t))) }
     : { cat: filter !== '전체' ? filter : '한식', rating: 0, tickets: new Set() };
   if (!place && preset?.cat) form.cat = guessCat(preset.cat) || form.cat;
   $('form-title').textContent = place ? '맛집 수정' : '맛집 등록';
@@ -472,6 +469,93 @@ $('list-body').onclick = (e) => {
   openPopup(p);
 };
 $('btn-locate').onclick = () => locate(true);
+
+// ---------- 점메추 (랜덤 맛집 추천) ----------
+let pickCur = null;
+let pickLast = null;
+let pickTimer;
+function startPick() {
+  if (!approved()) return;
+  const pool = visible();
+  const box = $('pick');
+  box.classList.remove('hidden', 'reveal');
+  $('result').classList.add('hidden');
+  $('pick-actions').classList.add('hidden');
+  if (!pool.length) {
+    $('pick-title').textContent = '등록된 맛집이 없어요 😢';
+    $('pick-sub').textContent = filter === '전체' ? '먼저 맛집을 등록해 주세요.' : `'${filter}' 카테고리에 등록된 맛집이 없어요.`;
+    box.classList.remove('shuffling');
+    $('pick-actions').classList.remove('hidden');
+    $('pick-map').classList.add('hidden');
+    $('pick-again').classList.add('hidden');
+    return;
+  }
+  $('pick-map').classList.remove('hidden');
+  $('pick-again').classList.remove('hidden');
+  $('pick-title').textContent = '오늘 점심은…?';
+  $('pick-sub').textContent = filter === '전체' ? `등록된 ${pool.length}곳 중에서 뽑는 중...` : `${filter} ${pool.length}곳 중에서 뽑는 중...`;
+  box.classList.add('shuffling');
+  clearTimeout(pickTimer);
+  pickTimer = setTimeout(() => {
+    const cand = pool.length > 1 ? pool.filter((p) => p.id !== pickLast) : pool;
+    pickCur = cand[Math.floor(Math.random() * cand.length)];
+    pickLast = pickCur.id;
+    box.classList.remove('shuffling');
+    box.classList.add('reveal');
+    setTimeout(showPickResult, 350);
+  }, 1800);
+}
+function showPickResult() {
+  const p = pickCur;
+  $('result').innerHTML = `<div class="emo">${CATS[p.cat]}</div><div class="nm">${esc(p.name)}</div><div class="rt">${stars(p.rating)}</div>
+    <div class="mt">${esc(p.cat)} · 등록: ${esc(p.author || '익명')}</div>
+    <div>${p.tickets.map((t) => `<span class="tk ${TICKET_CLS[t] || ''}">${esc(t)}</span>`).join('')}</div>
+    ${p.memo ? `<div class="mt">${esc(p.memo)}</div>` : ''}`;
+  $('result').classList.remove('hidden');
+  $('pick-title').textContent = '🎉 오늘의 점심!';
+  $('pick-sub').textContent = '';
+  $('pick-actions').classList.remove('hidden');
+}
+function closePick() {
+  clearTimeout(pickTimer);
+  $('pick').classList.add('hidden');
+  $('pick').classList.remove('shuffling', 'reveal');
+}
+$('btn-pick').onclick = () => { closeList(); closeForm(); startPick(); };
+$('pick-again').onclick = startPick;
+$('pick-close').onclick = closePick;
+$('pick').onclick = (e) => { if (e.target.id === 'pick') closePick(); };
+$('pick-map').onclick = () => {
+  const p = pickCur;
+  closePick();
+  if (!p || !map) return;
+  moveTo(p.lat, p.lng, 2);
+  openPopup(p);
+};
+
+// ---------- 홈 화면에 추가 (PWA) ----------
+let installEvt = null;
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+const ua = navigator.userAgent;
+const isIOS = /iphone|ipad|ipod/i.test(ua);
+if (!isStandalone()) show('btn-install');
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; });
+window.addEventListener('appinstalled', () => { installEvt = null; hide('btn-install'); hide('sheet-install'); });
+$('btn-install').onclick = async () => {
+  if (installEvt) { // Android/Chrome: 바로 설치창
+    installEvt.prompt();
+    await installEvt.userChoice;
+    installEvt = null;
+    return;
+  }
+  $('install-body').innerHTML = isIOS
+    ? `<ol><li>Safari 하단의 <b>공유(⬆️)</b> 버튼을 누릅니다.</li><li><b>홈 화면에 추가</b>를 선택합니다.</li><li>오른쪽 위 <b>추가</b>를 누르면 완료!</li></ol>
+       <p class="hint">※ iPhone은 반드시 <b>Safari</b>에서 열어야 합니다. (카카오톡·네이버 앱 내 브라우저에서는 불가)</p>`
+    : `<ol><li>브라우저 우측 상단 <b>⋮ 메뉴</b>를 엽니다.</li><li><b>홈 화면에 추가</b> 또는 <b>앱 설치</b>를 선택합니다.</li></ol>
+       <p class="hint">※ HTTPS 주소(배포된 주소)에서만 설치할 수 있습니다. 카카오톡 등 앱 내 브라우저라면 Chrome/Safari로 열어 주세요.</p>`;
+  show('sheet-install');
+};
+$('install-close').onclick = () => hide('sheet-install');
 
 // ---------- 시작 ----------
 renderFilters();
