@@ -38,6 +38,19 @@
   <button id="btn-add" class="fab" title="맛집 등록">＋</button>
 </div>
 
+<!-- 댓글 시트 -->
+<section id="sheet-comments" class="sheet hidden">
+  <div class="sheet-head"><strong id="cm-title">댓글</strong><button class="link" id="cm-close">닫기</button></div>
+  <div class="sheet-body">
+    <div id="cm-list"></div>
+    <div class="inline" style="align-items:flex-end">
+      <textarea id="cm-input" rows="2" maxlength="200" placeholder="익명으로 댓글 남기기 (200자)" style="margin:0"></textarea>
+      <button id="cm-send" class="btn-main" style="width:auto;padding:0 18px;height:46px;flex:none">등록</button>
+    </div>
+    <p class="hint" style="margin:8px 0 0">🕶️ 다른 회원에게는 닉네임 없이 '익명N'으로만 보입니다.</p>
+  </div>
+</section>
+
 <!-- 점메추 -->
 <div id="pick" class="hidden">
   <div id="pick-box">
