@@ -6,8 +6,12 @@ html, body { margin: 0; height: 100%; font-family: -apple-system, "Noto Sans KR"
 
 #topbar { position: absolute; top: 0; left: 0; right: 0; z-index: 500; padding: calc(env(safe-area-inset-top) + 8px) 8px 8px;
   pointer-events: none; }
-#filters { display: flex; gap: 6px; overflow-x: auto; pointer-events: auto; scrollbar-width: none; }
-#filters::-webkit-scrollbar { display: none; }
+#filters, #tfilters { display: flex; gap: 6px; overflow-x: auto; pointer-events: auto; scrollbar-width: none; }
+#tfilters { margin-top: 6px; }
+#filters::-webkit-scrollbar, #tfilters::-webkit-scrollbar { display: none; }
+.lrow { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 6px; scrollbar-width: none; }
+.lrow::-webkit-scrollbar { display: none; }
+.lrow .chip { box-shadow: none; padding: 5px 11px; font-size: 13px; }
 .chip { flex: none; border: 1px solid #ddd; background: #fff; border-radius: 999px; padding: 7px 13px; font-size: 14px;
   box-shadow: 0 1px 4px rgba(0,0,0,.2); cursor: pointer; user-select: none; }
 .chip.on { background: var(--brand); color: #fff; border-color: var(--brand); }
@@ -18,6 +22,9 @@ html, body { margin: 0; height: 100%; font-family: -apple-system, "Noto Sans KR"
 .fab { width: 56px; height: 56px; border-radius: 50%; border: 0; background: var(--brand); color: #fff; font-size: 30px;
   box-shadow: 0 3px 10px rgba(0,0,0,.35); cursor: pointer; }
 .fab.small { width: 44px; height: 44px; font-size: 20px; background: #fff; color: #222; }
+.fab.has-n { position: relative; }
+.fab.has-n::after { content: attr(data-n); position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box;
+  border-radius: 9px; background: #e53935; color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
 
 .sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1000; background: #fff; border-radius: 16px 16px 0 0;
   box-shadow: 0 -4px 16px rgba(0,0,0,.25); max-height: 58vh; display: flex; flex-direction: column;
@@ -83,8 +90,14 @@ body.form-open #map { bottom: 58vh; }
 .pin.bp { background: var(--brand); }
 .pin.both { background: linear-gradient(90deg, var(--dk) 50%, var(--brand) 50%); }
 .pin.none { background: var(--none); }
-.chips .chip.dk.on { background: var(--dk); border-color: var(--dk); }
+.chip.dk.on { background: var(--dk); border-color: var(--dk); }
+.chip.wish.on { background: var(--wish); border-color: var(--wish); }
 .pop .tk.dk, .kcard .tk.dk { background: var(--dk-soft); color: var(--dk); }
+/* 법카조르기(위시리스트)=금색 */
+:root { --wish: #D4A017; --wish-soft: #FFF4D1; --wish-text: #8A6100; }
+.pin.wish { background: var(--wish); }
+.dot.wish { background: var(--wish); }
+.pop .tk.wish, .kcard .tk.wish, #result .tk.wish { background: var(--wish-soft); color: var(--wish-text); }
 #legend { position: absolute; left: 10px; bottom: calc(env(safe-area-inset-bottom) + 22px); z-index: 500; display: flex; gap: 10px;
   background: rgba(255,255,255,.92); border-radius: 999px; padding: 6px 12px; font-size: 12px; box-shadow: 0 1px 5px rgba(0,0,0,.25); }
 body.form-open #legend { display: none; }
