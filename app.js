@@ -1,10 +1,10 @@
-const CATS = { 한식: '🍚', 양식: '🍝', 중식: '🥟', 일식: '🍣', 카페: '☕', 베이커리: '🥐', 기타: '🍴' };
-const TICKETS = ['식권대장', '비플페이'];
-const TICKET_CLS = { 식권대장: 'dk', 비플페이: 'bp' }; // 핀·칩 색상 (식권대장=초록, 비플페이=삼성블루)
+const CATS = { 한식: '🍚', 양식: '🍝', 중식: '🥟', 일식: '🍣', 샐러드: '🥗', 카페: '☕', 베이커리: '🥐', 기타: '🍴' };
+const TICKETS = ['식권대장', '비플페이', '법카조르기'];
+const TICKET_CLS = { 식권대장: 'dk', 비플페이: 'bp', 법카조르기: 'wish' }; // 핀·칩 색상 (식권대장=초록, 비플페이=삼성블루, 법카조르기=금색)
 const pinCls = (p) => {
   const dk = p.tickets.includes('식권대장');
   const bp = p.tickets.includes('비플페이');
-  return dk && bp ? 'both' : dk ? 'dk' : bp ? 'bp' : 'none';
+  return dk && bp ? 'both' : dk ? 'dk' : bp ? 'bp' : p.tickets.includes('법카조르기') ? 'wish' : 'none';
 };
 const SEOUL = { lat: 37.5665, lng: 126.978 };
 
@@ -21,7 +21,8 @@ const sb = configured ? supabase.createClient(cfg.url, cfg.anonKey) : null;
 let user = null;
 let profile = null;
 let places = [];
-let filter = '전체';
+let filter = '전체'; // 지도 카테고리 필터
+let tkFilter = '전체'; // 지도 식권 필터
 let channel = null;
 let editing = null;
 let form = { cat: '한식', rating: 0, tickets: new Set() };
@@ -70,6 +71,7 @@ async function onAuth(session) {
   if (error) alert('프로필 조회 실패: ' + error.message);
   profile = data;
   $('btn-admin').classList.toggle('hidden', !(approved() && profile.is_admin));
+  refreshPending();
   if (!approved()) {
     const rejected = profile?.status === 'rejected';
     $('p-title').textContent = rejected ? '🚫 가입이 거절되었습니다' : '⏳ 승인 대기 중';
@@ -109,6 +111,20 @@ $('p-logout').onclick = () => sb.auth.signOut();
 $('p-refresh').onclick = async () => onAuth((await sb.auth.getSession()).data.session);
 
 // ---------- 관리자: 가입 승인 ----------
+// 승인 대기 건수를 📋 버튼(빨간 숫자)과 👑 승인관리 버튼에 표시
+async function refreshPending() {
+  const isAdmin = approved() && profile?.is_admin;
+  let n = 0;
+  if (isAdmin) {
+    const { count } = await sb.from('profiles').select('id', { count: 'exact', head: true }).eq('status', 'pending').eq('is_admin', false);
+    n = count || 0;
+  }
+  const fab = $('btn-list');
+  fab.dataset.n = n;
+  fab.classList.toggle('has-n', n > 0);
+  $('btn-admin').textContent = n > 0 ? `👑 승인관리 (${n})` : '👑 승인관리';
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && profile) refreshPending(); });
 async function renderAdmin() {
   const { data, error } = await sb.from('profiles').select('*').eq('is_admin', false).order('created_at', { ascending: false });
   if (error) return ($('admin-body').textContent = error.message);
@@ -130,6 +146,7 @@ $('admin-body').onclick = async (e) => {
   const { error } = await sb.from('profiles').update({ status: b.dataset.s }).eq('id', b.dataset.id);
   if (error) alert('변경 실패: ' + error.message);
   renderAdmin();
+  refreshPending();
 };
 
 // ---------- 카카오맵 SDK ----------
@@ -195,7 +212,7 @@ function moveTo(lat, lng, level = 3) {
 
 // ---------- 마커 / 팝업 / 필터 ----------
 const stars = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
-const visible = () => places.filter((p) => filter === '전체' || p.cat === filter);
+const visible = () => places.filter((p) => (filter === '전체' || p.cat === filter) && (tkFilter === '전체' || p.tickets.includes(tkFilter)));
 
 function popupHtml(p) {
   return `<div class="pop">
@@ -305,11 +322,22 @@ function renderFilters() {
   $('filters').innerHTML = ['전체', ...Object.keys(CATS)]
     .map((c) => `<div class="chip ${c === filter ? 'on' : ''}" data-c="${c}">${CATS[c] || ''} ${c}</div>`).join('');
 }
+function renderTFilters() {
+  $('tfilters').innerHTML = ['전체', ...TICKETS]
+    .map((t) => `<div class="chip ${TICKET_CLS[t] || ''} ${t === tkFilter ? 'on' : ''}" data-t="${t}">${t === '전체' ? '🎫 식권 전체' : t}</div>`).join('');
+}
 $('filters').onclick = (e) => {
   const c = e.target.closest('.chip')?.dataset.c;
   if (!c) return;
   filter = c;
   renderFilters();
+  renderMarkers();
+};
+$('tfilters').onclick = (e) => {
+  const t = e.target.closest('.chip')?.dataset.t;
+  if (!t) return;
+  tkFilter = t;
+  renderTFilters();
   renderMarkers();
 };
 
@@ -578,24 +606,58 @@ $('cm-list').onclick = async (e) => {
 };
 
 // ---------- 목록 ----------
+const LIST_RADIUS = 2000; // m, 목록은 현재 GPS 위치 기준 반경
+let listCat = '전체';
+let listTk = '전체';
+let listLoc = null; // 목록 열 때 확인한 내 위치 (실패하면 null)
+let listLocBusy = false;
+const fmtDist = (m) => (m < 950 ? Math.round(m / 10) * 10 + 'm' : (m / 1000).toFixed(1) + 'km');
 function renderList() {
-  const list = visible().sort((a, b) => b.rating - a.rating);
-  $('list-body').innerHTML = list.length
-    ? list.map((p) => `<div class="item" data-id="${p.id}"><div><div class="t">${CATS[p.cat]} ${esc(p.name)}</div>
-        <div class="s">${esc(p.cat)} · ${p.tickets.map(esc).join(', ') || '식권 정보 없음'} · ${esc(p.author || '익명')}</div></div>
+  const chips = (items, cur, key) => `<div class="lrow">${items.map((c) =>
+    `<div class="chip ${key === 't' ? TICKET_CLS[c] || '' : ''} ${c === cur ? 'on' : ''}" data-${key}="${c}">${key === 'c' ? (CATS[c] || '') + ' ' + c : c === '전체' ? '🎫 식권 전체' : c}</div>`).join('')}</div>`;
+  let list = places.filter((p) => (listCat === '전체' || p.cat === listCat) && (listTk === '전체' || p.tickets.includes(listTk)));
+  let note;
+  if (listLoc) {
+    list = list.filter((p) => (p._d = distM(listLoc, p)) <= LIST_RADIUS);
+    note = `📍 내 위치 반경 2km 이내 · ${list.length}곳`;
+  } else if (listLocBusy) {
+    list = [];
+    note = '📍 내 위치 확인 중…';
+  } else {
+    note = '⚠️ 위치를 확인할 수 없어 전체 맛집을 표시합니다. (위치 권한·HTTPS 확인)';
+  }
+  list.sort((a, b) => b.rating - a.rating);
+  $('list-body').innerHTML = chips(['전체', ...Object.keys(CATS)], listCat, 'c') + chips(['전체', ...TICKETS], listTk, 't')
+    + `<div class="hint" style="margin:6px 0 2px">${note}</div>`
+    + (list.length
+      ? list.map((p) => `<div class="item" data-id="${p.id}"><div><div class="t">${CATS[p.cat]} ${esc(p.name)}</div>
+        <div class="s">${esc(p.cat)} · ${p.tickets.map(esc).join(', ') || '식권 정보 없음'}${listLoc ? ' · ' + fmtDist(p._d) : ''} · ${esc(p.author || '익명')}</div></div>
         <div class="rate" style="color:#ffb400">${stars(p.rating)}</div></div>`).join('')
-    : '<div class="empty">등록된 맛집이 없습니다.</div>';
+      : `<div class="empty">${listLocBusy ? '' : listLoc ? '조건에 맞는 맛집이 없습니다.' : '등록된 맛집이 없습니다.'}</div>`);
+}
+async function refreshListLoc() {
+  listLocBusy = true;
+  renderList();
+  listLoc = await locate(false, true);
+  listLocBusy = false;
+  renderList();
 }
 function closeList() { hide('sheet-list'); }
 $('btn-list').onclick = () => {
   if (!$('sheet-list').classList.contains('hidden')) return closeList();
   closeForm();
   dropComments();
-  renderList();
   show('sheet-list');
+  refreshListLoc();
 };
 $('list-close').onclick = closeList;
 $('list-body').onclick = (e) => {
+  const chip = e.target.closest('.chip');
+  if (chip) {
+    if (chip.dataset.c) listCat = chip.dataset.c;
+    if (chip.dataset.t) listTk = chip.dataset.t;
+    return renderList();
+  }
   const p = places.find((x) => x.id === e.target.closest('.item')?.dataset.id);
   if (!p || !map) return;
   closeList();
@@ -720,6 +782,7 @@ $('install-close').onclick = () => hide('sheet-install');
 
 // ---------- 시작 ----------
 renderFilters();
+renderTFilters();
 loadKakao().then(initMap).catch(mapError);
 if (!configured) {
   show('sheet-auth');
