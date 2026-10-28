@@ -104,7 +104,6 @@
   <div class="sheet-head">
     <strong>맛집 목록</strong>
     <span>
-      <button class="link hidden" id="btn-admin">👑 승인관리</button>
       <button class="link" id="btn-logout">로그아웃</button>
       <button class="link" id="list-close">닫기</button>
     </span>
@@ -118,12 +117,12 @@
   <div class="sheet-body">
     <label>이메일<input id="a-email" type="email" autocomplete="email" placeholder="name@example.com"></label>
     <label>비밀번호 (6자 이상)<input id="a-pw" type="password" autocomplete="current-password"></label>
-    <label>별명 (가입할 때만 입력)<input id="a-nick" maxlength="20" placeholder="예: 맛집탐험가"></label>
+    <label>별명 (선택 · 가입할 때만, 비우면 이메일 앞부분)<input id="a-nick" maxlength="20" placeholder="예: 맛집탐험가"></label>
     <div class="inline">
       <button id="a-login" class="btn-main">로그인</button>
       <button id="a-signup" class="btn-sub" type="button">가입</button>
     </div>
-    <p class="hint" style="margin-top:10px">💡 가입 후 메일로 온 <b>인증 링크</b>를 누르면 바로 이용할 수 있습니다.</p>
+    <p class="hint" style="margin-top:10px">💡 이메일과 비밀번호를 입력하고 <b>가입</b>을 누르면 바로 이용할 수 있습니다.</p>
     <p id="a-msg" class="hint" style="margin-top:10px"></p>
   </div>
 </section>
@@ -135,12 +134,6 @@
     <p id="p-msg">승인 대기 중입니다.</p>
     <button id="p-refresh" class="btn-sub" style="padding:10px 14px">승인 여부 새로고침</button>
   </div>
-</section>
-
-<!-- 관리자: 가입 승인 -->
-<section id="sheet-admin" class="sheet hidden">
-  <div class="sheet-head"><strong>👑 가입 승인 관리</strong><button class="link" id="admin-close">닫기</button></div>
-  <div class="sheet-body" id="admin-body"></div>
 </section>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
