@@ -60,7 +60,7 @@ async function fetchPlaces() {
 async function onAuth(session) {
   user = session?.user ?? null;
   profile = null;
-  ['sheet-auth', 'sheet-pending', 'sheet-admin'].forEach(hide);
+  ['sheet-auth', 'sheet-pending'].forEach(hide);
   if (!user) {
     places = [];
     renderMarkers();
@@ -70,13 +70,11 @@ async function onAuth(session) {
   const { data, error } = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
   if (error) alert('프로필 조회 실패: ' + error.message);
   profile = data;
-  $('btn-admin').classList.toggle('hidden', !(approved() && profile.is_admin));
-  refreshPending();
   if (!approved()) {
     const rejected = profile?.status === 'rejected';
-    $('p-title').textContent = rejected ? '🚫 가입이 거절되었습니다' : '⏳ 승인 대기 중';
+    $('p-title').textContent = rejected ? '🚫 이용이 제한되었습니다' : '⏳ 계정 준비 중';
     $('p-msg').textContent = rejected ? '이용이 제한된 계정입니다. 관리자에게 문의하세요.'
-      : `${profile?.nickname ?? ''}님, 메일로 받은 인증 링크를 누르면 바로 이용할 수 있습니다. 인증 후 아래 새로고침을 눌러 주세요.`;
+      : '계정 정보를 확인하지 못했습니다. 아래 새로고침을 눌러 주세요. 계속되면 관리자에게 문의하세요.';
     show('sheet-pending');
     places = [];
     renderMarkers();
@@ -96,58 +94,19 @@ async function authSubmit(signup) {
   const password = $('a-pw').value;
   const nickname = $('a-nick').value.trim();
   if (!email || password.length < 6) return ($('a-msg').textContent = '이메일과 6자 이상의 비밀번호를 입력하세요.');
-  if (signup && !nickname) return ($('a-msg').textContent = '별명을 입력하세요.');
   $('a-msg').textContent = '처리 중...';
   const { data, error } = signup
-    ? await sb.auth.signUp({ email, password, options: { data: { nickname }, emailRedirectTo: location.origin + location.pathname } })
+    ? await sb.auth.signUp({ email, password, options: { data: { nickname } } })
     : await sb.auth.signInWithPassword({ email, password });
   if (error) return ($('a-msg').textContent = error.message);
-  $('a-msg').textContent = signup && !data.session ? '가입 완료! 메일로 온 인증 링크를 누른 뒤 로그인하세요.' : '';
+  // 가입하면 바로 로그인됨 (Supabase의 Confirm email이 꺼져 있어야 함)
+  $('a-msg').textContent = signup && !data.session ? '가입은 되었지만 이메일 확인이 켜져 있어 바로 로그인되지 않습니다. 관리자에게 문의하세요.' : '';
 }
 $('a-login').onclick = () => authSubmit(false);
 $('a-signup').onclick = () => authSubmit(true);
 $('btn-logout').onclick = () => sb.auth.signOut();
 $('p-logout').onclick = () => sb.auth.signOut();
 $('p-refresh').onclick = async () => onAuth((await sb.auth.getSession()).data.session);
-
-// ---------- 관리자: 가입 승인 ----------
-// 승인 대기 건수를 📋 버튼(빨간 숫자)과 👑 승인관리 버튼에 표시
-async function refreshPending() {
-  const isAdmin = approved() && profile?.is_admin;
-  let n = 0;
-  if (isAdmin) {
-    const { count } = await sb.from('profiles').select('id', { count: 'exact', head: true }).eq('status', 'pending').eq('is_admin', false);
-    n = count || 0;
-  }
-  const fab = $('btn-list');
-  fab.dataset.n = n;
-  fab.classList.toggle('has-n', n > 0);
-  $('btn-admin').textContent = n > 0 ? `👑 승인관리 (${n})` : '👑 승인관리';
-}
-document.addEventListener('visibilitychange', () => { if (!document.hidden && profile) refreshPending(); });
-async function renderAdmin() {
-  const { data, error } = await sb.from('profiles').select('*').eq('is_admin', false).order('created_at', { ascending: false });
-  if (error) return ($('admin-body').textContent = error.message);
-  const label = { pending: '대기', approved: '승인됨', rejected: '거절됨' };
-  const order = { pending: 0, approved: 1, rejected: 2 };
-  data.sort((a, b) => order[a.status] - order[b.status]);
-  $('admin-body').innerHTML = data.length
-    ? data.map((m) => `<div class="item"><div><div class="t">${esc(m.nickname)} <span class="s">(${label[m.status]})</span></div>
-        <div class="s">${esc(m.email)}</div></div>
-        <div>${m.status !== 'approved' ? `<button class="link" data-id="${m.id}" data-s="approved">승인</button>` : ''}
-        ${m.status !== 'rejected' ? `<button class="link" data-id="${m.id}" data-s="rejected">${m.status === 'approved' ? '차단' : '거절'}</button>` : ''}</div></div>`).join('')
-    : '<div class="empty">가입 신청이 없습니다.</div>';
-}
-$('btn-admin').onclick = () => { closeList(); show('sheet-admin'); renderAdmin(); };
-$('admin-close').onclick = () => hide('sheet-admin');
-$('admin-body').onclick = async (e) => {
-  const b = e.target.closest('[data-id]');
-  if (!b) return;
-  const { error } = await sb.from('profiles').update({ status: b.dataset.s }).eq('id', b.dataset.id);
-  if (error) alert('변경 실패: ' + error.message);
-  renderAdmin();
-  refreshPending();
-};
 
 // ---------- 카카오맵 SDK ----------
 function loadKakao() {
