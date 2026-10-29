@@ -93,7 +93,7 @@ async function authSubmit(signup) {
   const email = $('a-email').value.trim();
   const password = $('a-pw').value;
   const nickname = $('a-nick').value.trim();
-  if (!email || password.length < 6) return ($('a-msg').textContent = '이메일과 6자 이상의 비밀번호를 입력하세요.');
+  if (!email.includes('@') || password.length < 6) return ($('a-msg').textContent = '이메일(@ 포함)과 6자 이상의 비밀번호를 입력하세요.');
   $('a-msg').textContent = '처리 중...';
   const { data, error } = signup
     ? await sb.auth.signUp({ email, password, options: { data: { nickname } } })
@@ -713,31 +713,6 @@ $('pick-map').onclick = () => {
   moveTo(p.lat, p.lng, 2);
   openPopup(p);
 };
-
-// ---------- 홈 화면에 추가 (PWA) ----------
-// 이미지 파일을 쓰지 않으므로 아이콘은 기기 기본 모양(앱 이름 첫 글자 등)으로 표시된다
-let installEvt = null;
-const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone;
-const ua = navigator.userAgent;
-const isIOS = /iphone|ipad|ipod/i.test(ua);
-if (!isStandalone()) show('btn-install');
-window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; });
-window.addEventListener('appinstalled', () => { installEvt = null; hide('btn-install'); hide('sheet-install'); });
-$('btn-install').onclick = async () => {
-  if (installEvt) { // Android/Chrome: 바로 설치창
-    installEvt.prompt();
-    await installEvt.userChoice;
-    installEvt = null;
-    return;
-  }
-  $('install-body').innerHTML = isIOS
-    ? `<ol><li>Safari 하단의 <b>공유(⬆️)</b> 버튼을 누릅니다.</li><li><b>홈 화면에 추가</b>를 선택합니다.</li><li>오른쪽 위 <b>추가</b>를 누르면 완료!</li></ol>
-       <p class="hint">※ iPhone은 반드시 <b>Safari</b>에서 열어야 합니다. (카카오톡·네이버 앱 내 브라우저에서는 불가)</p>`
-    : `<ol><li>브라우저 우측 상단 <b>⋮ 메뉴</b>를 엽니다.</li><li><b>홈 화면에 추가</b> 또는 <b>앱 설치</b>를 선택합니다.</li></ol>
-       <p class="hint">※ HTTPS 주소(배포된 주소)에서만 설치할 수 있습니다. 카카오톡 등 앱 내 브라우저라면 Chrome/Safari로 열어 주세요.</p>`;
-  show('sheet-install');
-};
-$('install-close').onclick = () => hide('sheet-install');
 
 // ---------- 시작 ----------
 renderFilters();
