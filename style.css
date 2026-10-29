@@ -19,9 +19,8 @@ html, body { margin: 0; height: 100%; font-family: -apple-system, "Noto Sans KR"
 
 #fabs { position: absolute; right: 14px; bottom: calc(env(safe-area-inset-bottom) + 18px); z-index: 500;
   display: flex; flex-direction: column; gap: 10px; align-items: center; }
-.fab { width: 56px; height: 56px; border-radius: 50%; border: 0; background: var(--brand); color: #fff; font-size: 30px;
-  box-shadow: 0 3px 10px rgba(0,0,0,.35); cursor: pointer; }
-.fab.small { width: 44px; height: 44px; font-size: 20px; background: #fff; color: #222; }
+.fab { width: 48px; height: 48px; border-radius: 50%; border: 0; background: #fff; color: var(--brand); font-size: 22px;
+  box-shadow: 0 3px 10px rgba(0,0,0,.35); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
 
 .sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1000; background: #fff; border-radius: 16px 16px 0 0;
   box-shadow: 0 -4px 16px rgba(0,0,0,.25); max-height: 58vh; display: flex; flex-direction: column;
@@ -101,7 +100,6 @@ body.form-open #legend { display: none; }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
 .dot.dk { background: var(--dk); } .dot.bp { background: var(--brand); } .dot.both { background: linear-gradient(90deg, var(--dk) 50%, var(--brand) 50%); }
 /* 점메추 */
-.fab.pill { width: auto; height: 44px; border-radius: 999px; padding: 0 16px; font-size: 15px; font-weight: 700; background: #fff; color: var(--brand); }
 #pick { position: absolute; inset: 0; z-index: 2000; background: rgba(10,20,60,.6); display: flex; align-items: center; justify-content: center; }
 #pick-box { width: min(320px, 88vw); text-align: center; color: #fff; }
 #pick-title { font-size: 20px; font-weight: 700; margin-bottom: 18px; min-height: 28px; }
@@ -151,3 +149,4 @@ body.form-open #legend { display: none; }
 .glist .gbody { max-height: 38vh; overflow-y: auto; margin-top: 4px; }
 .glist .item { padding: 8px 0; }
 .glist .item:last-child { border-bottom: 0; }
+
